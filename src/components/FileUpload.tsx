@@ -76,7 +76,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+    <div className="bg-white rounded-xl border border-slate-200 p-6">
       <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
         <Upload className="w-5 h-5 text-blue-600" />
         Upload Policy Document
@@ -89,12 +89,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
         onDragLeave={handleDragLeave}
         onClick={() => !isLoading && inputRef.current?.click()}
         className={`
-          relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200
+          relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200
           ${dragging
             ? 'border-blue-500 bg-blue-50 scale-[1.01]'
             : selectedFile
               ? 'border-green-400 bg-green-50'
-              : 'border-slate-300 hover:border-blue-400 hover:bg-blue-50/50'
+              : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50/40'
           }
           ${isLoading ? 'pointer-events-none opacity-60' : ''}
         `}
@@ -180,7 +180,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
           mt-4 w-full py-3.5 px-6 rounded-xl font-semibold text-base transition-all duration-200
           flex items-center justify-center gap-2
           ${selectedFile && !isLoading
-            ? 'bg-blue-700 hover:bg-blue-800 text-white shadow-md hover:shadow-lg active:scale-[0.99]'
+            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm active:scale-[0.99]'
             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
           }
         `}

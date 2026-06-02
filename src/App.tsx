@@ -52,7 +52,7 @@ function App() {
     : null
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 font-sans">
       <Header />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -95,28 +95,25 @@ function App() {
 
             {/* Instructions */}
             {!analysisData && (
-              <div className="mt-6 bg-blue-900 text-white rounded-2xl p-6">
-                <h3 className="font-semibold flex items-center gap-2 mb-3">
-                  <ShieldCheck className="w-5 h-5" />
+              <div className="mt-4 bg-white border border-slate-200 rounded-xl p-5">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-3 text-sm">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" />
                   How It Works
                 </h3>
-                <ol className="space-y-2.5 text-sm text-blue-100">
-                  <li className="flex items-start gap-2">
-                    <span className="font-bold text-white shrink-0">1.</span>
-                    Upload a hospital policy, procedure, or compliance document (PDF, DOCX, or TXT).
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="font-bold text-white shrink-0">2.</span>
-                    Click &ldquo;Analyze Policy&rdquo; to trigger AI-powered analysis using Claude.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="font-bold text-white shrink-0">3.</span>
-                    Review the summary, regulatory frameworks, and identified risk areas.
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="font-bold text-white shrink-0">4.</span>
-                    Work through the interactive compliance checklist and export it when done.
-                  </li>
+                <ol className="space-y-3">
+                  {[
+                    'Upload a hospital policy, procedure, or compliance document (PDF, DOCX, or TXT).',
+                    'Click "Analyze Policy" to trigger AI-powered analysis.',
+                    'Review the plain-language summary, regulatory frameworks, and risk areas.',
+                    'Work through the compliance checklist — each item includes where to find supporting information in your EMR.',
+                  ].map((step, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm text-slate-600">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center mt-0.5">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
                 </ol>
               </div>
             )}
@@ -135,12 +132,12 @@ function App() {
         </div>
       </main>
 
-      <footer className="mt-12 border-t border-slate-200 bg-white py-5">
+      <footer className="mt-12 border-t border-slate-200 bg-white py-4">
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between flex-wrap gap-2">
-          <p className="text-sm text-slate-400">
-            Hospital Policy Compliance Assistant &mdash; For internal compliance review use only.
+          <p className="text-xs text-slate-400">
+            For internal compliance review use only. Not legal advice.
           </p>
-          <p className="text-sm text-slate-400">Powered by Claude AI</p>
+          <p className="text-xs text-slate-400">Powered by Claude AI</p>
         </div>
       </footer>
     </div>
@@ -155,7 +152,7 @@ interface FeatureCardProps {
 
 function FeatureCard({ icon, title, desc }: FeatureCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+    <div className="bg-white rounded-lg border border-slate-200 p-5">
       <div className="bg-slate-50 w-11 h-11 rounded-xl flex items-center justify-center mb-3">
         {icon}
       </div>

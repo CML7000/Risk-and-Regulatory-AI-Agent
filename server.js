@@ -74,7 +74,11 @@ async function extractText(file) {
 
 const SYSTEM_PROMPT = `You are an expert hospital compliance officer and regulatory specialist with deep knowledge of healthcare law, accreditation standards, and risk management. Analyze healthcare policy and procedure documents and provide structured compliance analysis.
 
-Your analysis must be thorough, actionable, and focused on practical compliance steps that hospital risk and compliance teams can immediately use. Always return valid JSON matching the exact schema requested.`;
+Your audience is hospital compliance and risk staff who may have NO clinical background. Write all descriptions in plain, everyday English — avoid medical jargon. When you must use a clinical term, briefly define it in parentheses.
+
+For every checklist item you MUST include an "emrLocation" object that tells a non-clinical compliance reviewer exactly where to find the relevant information inside common hospital EMR systems (Epic, Cerner, Meditech, or generic terms). Write the steps as if explaining to someone opening the EMR for the first time. Be specific: name the tab, module, or screen. The "whatToLookFor" field should describe what a correct, compliant record looks like versus a non-compliant one, in plain language.
+
+Always return valid JSON matching the exact schema requested.`;
 
 function buildUserPrompt(documentText) {
   const truncated = documentText.length > 50000 ? documentText.slice(0, 50000) + '\n\n[Document truncated for analysis]' : documentText;
@@ -104,10 +108,19 @@ function buildUserPrompt(documentText) {
   "checklist": [
     {
       "id": "unique-id-1",
-      "title": "Checklist item title",
-      "description": "Detailed description of what needs to be done",
+      "title": "Checklist item title — written in plain language a non-clinical person can understand",
+      "description": "Plain-language explanation of what needs to be verified and why it matters for compliance. No medical jargon. If a clinical term is unavoidable, define it in parentheses.",
       "priority": "Critical|High|Medium|Low",
-      "category": "Category name (e.g., Documentation, Training, Process, Technology, Governance)"
+      "category": "Category name (e.g., Documentation, Training, Process, Technology, Governance)",
+      "emrLocation": {
+        "section": "Short label for where this lives in the EMR (e.g., 'Patient Chart → Consent Forms tab')",
+        "steps": [
+          "Step 1: Open the patient chart and click the [Tab Name] tab",
+          "Step 2: Look for the [Record/Form Name] entry",
+          "Step 3: ..."
+        ],
+        "whatToLookFor": "Plain-language description of what a COMPLIANT record looks like (e.g., 'The consent form should be signed and dated before the procedure date. If the signature is missing or the date is after the procedure, this is a compliance issue.')"
+      }
     }
   ]
 }
@@ -117,7 +130,8 @@ Requirements:
 - highlights: exactly 5-8 bullet points covering the most important policy elements
 - frameworks: identify ALL relevant regulatory frameworks (HIPAA, Joint Commission, CMS, state regulations, OSHA, etc.)
 - riskAreas: identify 3-6 specific compliance risk areas with severity ratings
-- checklist: 8-12 actionable compliance items with priority ratings
+- checklist: 8-12 actionable compliance items with priority ratings; every item MUST include a populated "emrLocation" object with realistic, specific navigation steps for common hospital EMR systems
+- All text must be written for a non-clinical compliance audience — no unexplained medical jargon
 
 Document to analyze:
 
@@ -188,6 +202,7 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
             priority: ['Critical', 'High', 'Medium', 'Low'].includes(item.priority) ? item.priority : 'Medium',
             category: item.category || 'General',
             completed: false,
+            emrLocation: item.emrLocation || null,
           }))
         : [],
     };

@@ -27,6 +27,11 @@ export interface ChecklistItem {
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   category: string
   completed: boolean
+  emrLocation?: {
+    section: string        // e.g. "Patient Chart → Consent Forms"
+    steps: string[]        // plain-language steps to find the record
+    whatToLookFor: string  // what the compliance reviewer should look for / verify
+  }
 }
 
 interface AnalysisResultsProps {
@@ -49,7 +54,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
   return (
     <div className="space-y-6 animate-slide-up">
       {/* Summary */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-blue-600" />
           Policy Summary
@@ -64,7 +69,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
       </div>
 
       {/* Key Highlights */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <Star className="w-5 h-5 text-amber-500" />
           Key Policy Highlights
@@ -81,7 +86,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
 
       {/* Regulatory Frameworks */}
       {data.frameworks.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-600" />
             Regulatory Frameworks Referenced
@@ -90,10 +95,10 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
             {data.frameworks.map((fw, i) => (
               <div
                 key={i}
-                className="bg-indigo-50 border border-indigo-100 rounded-xl p-4"
+                className="bg-white border border-slate-200 rounded-lg p-4"
               >
-                <div className="font-semibold text-indigo-900 text-sm mb-1">{fw.name}</div>
-                <div className="text-slate-600 text-sm leading-relaxed">{fw.relevance}</div>
+                <div className="font-semibold text-slate-800 text-sm mb-1">{fw.name}</div>
+                <div className="text-slate-500 text-sm leading-relaxed">{fw.relevance}</div>
               </div>
             ))}
           </div>
@@ -102,7 +107,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
 
       {/* Risk Areas */}
       {data.riskAreas.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
             Identified Risk Areas
@@ -111,7 +116,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
             {data.riskAreas.map((risk, i) => (
               <div
                 key={i}
-                className="flex items-start gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50"
+                className="flex items-start gap-4 p-4 rounded-lg border border-slate-200 bg-white"
               >
                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5 ${severityDot[risk.severity] || 'bg-slate-400'}`} />
                 <div className="flex-1 min-w-0">
