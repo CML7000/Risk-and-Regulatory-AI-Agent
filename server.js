@@ -122,6 +122,24 @@ function buildUserPrompt(documentText) {
         "whatToLookFor": "Plain-language description of what a COMPLIANT record looks like (e.g., 'The consent form should be signed and dated before the procedure date. If the signature is missing or the date is after the procedure, this is a compliance issue.')"
       }
     }
+  ],
+  "gaps": [
+    {
+      "id": "gap-1",
+      "title": "Short title describing what is missing or inadequate in the policy",
+      "description": "Plain-language explanation of the gap — what the policy currently says (or fails to say), and specifically what is missing compared to the industry standard. Written so a non-clinical compliance professional can understand it.",
+      "impact": "Explain in plain language what could go wrong — for the patient, the hospital, or from a regulatory standpoint — if this gap is not addressed.",
+      "recommendation": "Specific, actionable language the hospital should add or change in the policy to close this gap.",
+      "severity": "Critical|High|Medium|Low",
+      "sources": [
+        {
+          "organization": "Name of the authoritative body (e.g., CMS, CDC, The Joint Commission, ASHP, OSHA, HHS, state health department)",
+          "title": "Exact name of the guidance document, regulation, or standard (e.g., 'Conditions of Participation §482.13', 'CDC Hand Hygiene Guidelines 2002', 'ASHP Guidelines on Preventing Medication Errors')",
+          "type": "Regulation|Guidance|Standard|Best Practice|Law",
+          "url": "Direct URL to the authoritative source — ONLY use official government or organization websites (.gov, cms.gov, cdc.gov, jointcommission.org, ashp.org, osha.gov, hhs.gov). Do NOT fabricate URLs."
+        }
+      ]
+    }
   ]
 }
 
@@ -131,6 +149,7 @@ Requirements:
 - frameworks: identify ALL relevant regulatory frameworks (HIPAA, Joint Commission, CMS, state regulations, OSHA, etc.)
 - riskAreas: identify 3-6 specific compliance risk areas with severity ratings
 - checklist: 8-12 actionable compliance items with priority ratings; every item MUST include a populated "emrLocation" object with realistic, specific navigation steps for common hospital EMR systems
+- gaps: identify 4-8 specific gaps between the uploaded policy and current industry best practices. For EACH gap you MUST cite at least one authoritative source from CMS, CDC, The Joint Commission, ASHP, OSHA, HHS, or recognized healthcare law/regulatory bodies. Only cite sources that genuinely apply to this policy's subject matter. Every URL must be a real, known URL from an official organization website — if you are not certain of the exact URL, omit the url field rather than guessing.
 - All text must be written for a non-clinical compliance audience — no unexplained medical jargon
 
 Document to analyze:
@@ -203,6 +222,22 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
             category: item.category || 'General',
             completed: false,
             emrLocation: item.emrLocation || null,
+          }))
+        : [],
+      gaps: Array.isArray(analysisData.gaps)
+        ? analysisData.gaps.map((gap, idx) => ({
+            id: gap.id || `gap-${idx}`,
+            title: gap.title || 'Untitled Gap',
+            description: gap.description || '',
+            impact: gap.impact || '',
+            recommendation: gap.recommendation || '',
+            severity: ['Critical', 'High', 'Medium', 'Low'].includes(gap.severity) ? gap.severity : 'Medium',
+            sources: Array.isArray(gap.sources) ? gap.sources.map(s => ({
+              organization: s.organization || '',
+              title: s.title || '',
+              type: s.type || 'Guidance',
+              url: s.url || null,
+            })) : [],
           }))
         : [],
     };

@@ -3,7 +3,8 @@ import Header from './components/Header'
 import FileUpload from './components/FileUpload'
 import AnalysisResults, { AnalysisData, ChecklistItem } from './components/AnalysisResults'
 import ComplianceChecklist from './components/ComplianceChecklist'
-import { ShieldCheck, FileText, ListChecks, BarChart3 } from 'lucide-react'
+import PolicyGaps from './components/PolicyGaps'
+import { ShieldCheck, FileText, ListChecks, BarChart3, ShieldAlert } from 'lucide-react'
 
 function App() {
   const [isLoading, setIsLoading] = useState(false)
@@ -68,7 +69,7 @@ function App() {
                 compliance analysis with actionable recommendations.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
               <FeatureCard
                 icon={<FileText className="w-6 h-6 text-blue-600" />}
                 title="Smart Document Analysis"
@@ -80,9 +81,14 @@ function App() {
                 desc="Identifies HIPAA, Joint Commission, CMS, OSHA, and other applicable frameworks."
               />
               <FeatureCard
+                icon={<ShieldAlert className="w-6 h-6 text-amber-600" />}
+                title="Gap Analysis"
+                desc="Surfaces gaps between your policy and industry best practices, with citations from CMS, CDC, Joint Commission, ASHP, and other authoritative bodies."
+              />
+              <FeatureCard
                 icon={<ListChecks className="w-6 h-6 text-emerald-600" />}
                 title="Action Checklist"
-                desc="Generates a prioritized, interactive compliance checklist with export capability."
+                desc="Generates a prioritized, interactive compliance checklist with EMR navigation guidance and export capability."
               />
             </div>
           </div>
@@ -123,6 +129,9 @@ function App() {
           {analysisWithChecklist && (
             <div className="space-y-6">
               <AnalysisResults data={analysisWithChecklist} />
+              {analysisWithChecklist.gaps?.length > 0 && (
+                <PolicyGaps gaps={analysisWithChecklist.gaps} />
+              )}
               <ComplianceChecklist
                 items={checklist}
                 onToggle={handleToggle}

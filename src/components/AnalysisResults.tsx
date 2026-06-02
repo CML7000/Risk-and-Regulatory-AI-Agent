@@ -12,12 +12,30 @@ interface RiskArea {
   severity: 'High' | 'Medium' | 'Low'
 }
 
+export interface GapSource {
+  organization: string
+  title: string
+  type: 'Regulation' | 'Guidance' | 'Standard' | 'Best Practice' | 'Law' | string
+  url?: string | null
+}
+
+export interface PolicyGap {
+  id: string
+  title: string
+  description: string
+  impact: string
+  recommendation: string
+  severity: 'Critical' | 'High' | 'Medium' | 'Low'
+  sources: GapSource[]
+}
+
 export interface AnalysisData {
   summary: string
   highlights: string[]
   frameworks: Framework[]
   riskAreas: RiskArea[]
   checklist: ChecklistItem[]
+  gaps: PolicyGap[]
 }
 
 export interface ChecklistItem {
