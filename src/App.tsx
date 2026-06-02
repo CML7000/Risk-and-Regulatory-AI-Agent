@@ -1,186 +1,122 @@
 import React, { useState } from 'react'
 import Header from './components/Header'
 import FileUpload from './components/FileUpload'
-import AnalysisResults, { AnalysisData, ChecklistItem } from './components/AnalysisResults'
-import ComplianceChecklist from './components/ComplianceChecklist'
-import PolicyGaps from './components/PolicyGaps'
-import { ShieldCheck, FileText, ListChecks, BarChart3, ShieldAlert, AlertTriangle } from 'lucide-react'
+import ModeSelector, { Mode } from './components/ModeSelector'
+import ComplianceChecklistPanel from './components/ComplianceChecklistPanel'
+import GapsPanel from './components/GapsPanel'
+import RiskMatrixPanel from './components/RiskMatrixPanel'
+import VersionComparePanel from './components/VersionComparePanel'
+import QuestionPanel from './components/QuestionPanel'
+import { FileText, AlertTriangle } from 'lucide-react'
 
 function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null)
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([])
+  const [summary, setSummary] = useState<string | null>(null)
+  const [policyText, setPolicyText] = useState<string | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<Mode | null>(null)
 
   const handleAnalyze = async (file: File) => {
     setIsLoading(true)
     setError(null)
-    setAnalysisData(null)
+    setSummary(null)
+    setPolicyText(null)
+    setTruncated(false)
+    setSelectedMode(null)
 
     try {
       const formData = new FormData()
       formData.append('file', file)
 
-      const res = await fetch('/api/analyze', {
+      const res = await fetch('/api/summarize', {
         method: 'POST',
         body: formData,
       })
 
       if (!res.ok) {
-        // Parse error body if JSON, otherwise fall back to status text
         let errMsg = `Server error: ${res.status}`
         try {
           const errData = await res.json()
           errMsg = errData.error || errMsg
-        } catch { /* non-JSON error body */ }
+        } catch { /* non-JSON */ }
         throw new Error(errMsg)
       }
 
       const data = await res.json()
-
-      setAnalysisData(data)
-      setChecklist(data.checklist || [])
+      setSummary(data.summary || '')
+      setPolicyText(data.policyText || '')
+      setTruncated(data.truncated || false)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'An unexpected error occurred'
-      setError(msg)
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleToggle = (id: string) => {
-    setChecklist(prev =>
-      prev.map(item => (item.id === id ? { ...item, completed: !item.completed } : item))
-    )
-  }
-
-  const analysisWithChecklist: AnalysisData | null = analysisData
-    ? { ...analysisData, checklist }
-    : null
+  const ready = !!summary && !!policyText
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Header />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        {/* Empty state / feature cards */}
-        {!analysisData && !isLoading && (
-          <div className="mb-8 animate-fade-in">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">
-                Streamline Your Compliance Review
-              </h2>
-              <p className="text-slate-500 max-w-xl mx-auto">
-                Upload a hospital policy or procedure document and receive an instant AI-powered
-                compliance analysis with actionable recommendations.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-              <FeatureCard
-                icon={<FileText className="w-6 h-6 text-blue-600" />}
-                title="Smart Document Analysis"
-                desc="Supports PDF, DOCX, and TXT formats. Extracts key policy provisions automatically."
-              />
-              <FeatureCard
-                icon={<BarChart3 className="w-6 h-6 text-indigo-600" />}
-                title="Regulatory Mapping"
-                desc="Identifies HIPAA, Joint Commission, CMS, OSHA, and other applicable frameworks."
-              />
-              <FeatureCard
-                icon={<ShieldAlert className="w-6 h-6 text-amber-600" />}
-                title="Gap Analysis"
-                desc="Surfaces gaps between your policy and industry best practices, with citations from CMS, CDC, Joint Commission, ASHP, and other authoritative bodies."
-              />
-              <FeatureCard
-                icon={<ListChecks className="w-6 h-6 text-emerald-600" />}
-                title="Action Checklist"
-                desc="Generates a prioritized, interactive compliance checklist with EMR navigation guidance and export capability."
-              />
-            </div>
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Upload section — always visible */}
+        <FileUpload onAnalyze={handleAnalyze} isLoading={isLoading} error={error} />
+
+        {/* Truncation warning */}
+        {truncated && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm animate-fade-in">
+            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-amber-800">
+              <span className="font-semibold">Document was truncated.</span>{' '}
+              Your file exceeds 50,000 characters. Only the first portion was analyzed — results may be incomplete.
+            </p>
           </div>
         )}
 
-        <div className={`grid gap-6 ${analysisData ? 'lg:grid-cols-[1fr_2fr]' : ''}`}>
-          {/* Left column: upload */}
-          <div>
-            <FileUpload onAnalyze={handleAnalyze} isLoading={isLoading} error={error} />
-
-            {/* Instructions */}
-            {!analysisData && (
-              <div className="mt-4 bg-white border border-slate-200 rounded-xl p-5">
-                <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-3 text-sm">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" />
-                  How It Works
-                </h3>
-                <ol className="space-y-3">
-                  {[
-                    'Upload a hospital policy, procedure, or compliance document (PDF, DOCX, or TXT).',
-                    'Click "Analyze Policy" to trigger AI-powered analysis.',
-                    'Review the plain-language summary, regulatory frameworks, and risk areas.',
-                    'Work through the compliance checklist — each item includes where to find supporting information in your EMR.',
-                  ].map((step, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-slate-600">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center mt-0.5">
-                        {i + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
+        {/* Summary card */}
+        {ready && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 animate-fade-in">
+            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2 mb-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              Policy Summary
+            </h2>
+            <p className="text-slate-700 text-sm leading-relaxed">{summary}</p>
           </div>
+        )}
 
-          {/* Right column: results */}
-          {analysisWithChecklist && (
-            <div className="space-y-6">
-              {analysisWithChecklist.truncated && (
-                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-amber-800">
-                    <span className="font-semibold">Document was truncated.</span> Your file exceeds 50,000 characters. Only the first portion was analyzed — results may be incomplete. Consider splitting large documents into sections.
-                  </p>
-                </div>
-              )}
-              <AnalysisResults data={analysisWithChecklist} />
-              {analysisWithChecklist.gaps?.length > 0 && (
-                <PolicyGaps gaps={analysisWithChecklist.gaps} />
-              )}
-              <ComplianceChecklist
-                items={checklist}
-                onToggle={handleToggle}
-              />
-            </div>
-          )}
-        </div>
+        {/* Mode selector */}
+        {ready && (
+          <ModeSelector selected={selectedMode} onSelect={setSelectedMode} />
+        )}
+
+        {/* Mode panels */}
+        {ready && selectedMode === 'checklist' && (
+          <ComplianceChecklistPanel policyText={policyText!} />
+        )}
+        {ready && selectedMode === 'gaps' && (
+          <GapsPanel policyText={policyText!} />
+        )}
+        {ready && selectedMode === 'matrix' && (
+          <RiskMatrixPanel policyText={policyText!} />
+        )}
+        {ready && selectedMode === 'compare' && (
+          <VersionComparePanel />
+        )}
+        {ready && selectedMode === 'ask' && (
+          <QuestionPanel policyText={policyText!} />
+        )}
       </main>
 
       <footer className="mt-12 border-t border-slate-200 bg-white py-4">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between flex-wrap gap-2">
+        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between flex-wrap gap-2">
           <p className="text-xs text-slate-400">
             For internal compliance review use only. Not legal advice.
           </p>
           <p className="text-xs text-slate-400">Powered by Claude AI</p>
         </div>
       </footer>
-    </div>
-  )
-}
-
-interface FeatureCardProps {
-  icon: React.ReactNode
-  title: string
-  desc: string
-}
-
-function FeatureCard({ icon, title, desc }: FeatureCardProps) {
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 p-5">
-      <div className="bg-slate-50 w-11 h-11 rounded-xl flex items-center justify-center mb-3">
-        {icon}
-      </div>
-      <h3 className="font-semibold text-slate-800 mb-1">{title}</h3>
-      <p className="text-sm text-slate-500 leading-relaxed">{desc}</p>
     </div>
   )
 }

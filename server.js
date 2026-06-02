@@ -19,6 +19,7 @@ const TRUSTED_DOMAINS = [
   'cms.gov', 'cdc.gov', 'hhs.gov', 'osha.gov', 'nih.gov', 'ahrq.gov', 'medicare.gov',
   'jointcommission.org', 'ashp.org', 'aha.org', 'aanp.org', 'acog.org', 'ama-assn.org',
   'nursingworld.org', 'ismp.org', 'nccmerp.org', 'ihi.org', 'psnet.ahrq.gov',
+  'hrsa.gov',
 ];
 
 function sanitizeUrl(url) {
@@ -47,11 +48,19 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
   fileFilter: (_req, file, cb) => {
-    const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
-    if (allowed.includes(file.mimetype) || file.originalname.endsWith('.txt') || file.originalname.endsWith('.pdf') || file.originalname.endsWith('.docx')) {
+    const allowed = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv',
+      'application/csv',
+    ];
+    const allowedExts = ['.txt', '.pdf', '.docx', '.csv'];
+    const ext = '.' + file.originalname.split('.').pop().toLowerCase();
+    if (allowed.includes(file.mimetype) || allowedExts.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF, DOCX, and TXT files are allowed'));
+      cb(new Error('Only PDF, DOCX, TXT, and CSV files are allowed'));
     }
   },
 });
@@ -66,12 +75,17 @@ const anthropic = new Anthropic({
 
 async function extractText(file) {
   const { mimetype, originalname, buffer } = file;
+  const ext = '.' + originalname.split('.').pop().toLowerCase();
 
-  if (mimetype === 'text/plain' || originalname.endsWith('.txt')) {
+  if (mimetype === 'text/plain' || ext === '.txt') {
     return buffer.toString('utf-8');
   }
 
-  if (mimetype === 'application/pdf' || originalname.endsWith('.pdf')) {
+  if (mimetype === 'text/csv' || mimetype === 'application/csv' || ext === '.csv') {
+    return buffer.toString('utf-8');
+  }
+
+  if (mimetype === 'application/pdf' || ext === '.pdf') {
     try {
       const pdfParse = require('pdf-parse');
       const data = await pdfParse(buffer);
@@ -83,7 +97,7 @@ async function extractText(file) {
 
   if (
     mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    originalname.endsWith('.docx')
+    ext === '.docx'
   ) {
     try {
       const mammoth = require('mammoth');
@@ -97,105 +111,51 @@ async function extractText(file) {
   throw new Error('Unsupported file type');
 }
 
-const SYSTEM_PROMPT = `You are an expert hospital compliance officer and regulatory specialist with deep knowledge of healthcare law, accreditation standards, and risk management. Analyze healthcare policy and procedure documents and provide structured compliance analysis.
-
-Your audience is hospital compliance and risk staff who may have NO clinical background. Write all descriptions in plain, everyday English — avoid medical jargon. When you must use a clinical term, briefly define it in parentheses.
-
-For every checklist item you MUST include an "emrLocation" object that tells a non-clinical compliance reviewer exactly where to find the relevant information inside common hospital EMR systems (Epic, Cerner, Meditech, or generic terms). Write the steps as if explaining to someone opening the EMR for the first time. Be specific: name the tab, module, or screen. The "whatToLookFor" field should describe what a correct, compliant record looks like versus a non-compliant one, in plain language.
-
-Always return valid JSON matching the exact schema requested.`;
-
-function buildUserPrompt(documentText) {
-  const wasTruncated = documentText.length > 50000;
-  const truncated = wasTruncated ? documentText.slice(0, 50000) + '\n\n[Document truncated for analysis]' : documentText;
-  // wasTruncated is exported alongside the result so the UI can warn the user
-  buildUserPrompt._wasTruncated = wasTruncated;
-
-  return `Analyze the following hospital policy/procedure document and return a JSON object with this exact structure:
-
-{
-  "summary": "A plain-language summary of the policy in 2-3 paragraphs. Explain what the policy covers, its purpose, and who it applies to.",
-  "highlights": [
-    "Key policy highlight 1",
-    "Key policy highlight 2",
-    "... (5-8 bullet points total)"
-  ],
-  "frameworks": [
-    {
-      "name": "Framework or regulation name",
-      "relevance": "Brief explanation of how this framework applies to the policy"
-    }
-  ],
-  "riskAreas": [
-    {
-      "area": "Risk area title",
-      "description": "Description of the identified risk",
-      "severity": "High|Medium|Low"
-    }
-  ],
-  "checklist": [
-    {
-      "id": "unique-id-1",
-      "title": "Checklist item title — written in plain language a non-clinical person can understand",
-      "description": "Plain-language explanation of what needs to be verified and why it matters for compliance. No medical jargon. If a clinical term is unavoidable, define it in parentheses.",
-      "priority": "Critical|High|Medium|Low",
-      "category": "Category name (e.g., Documentation, Training, Process, Technology, Governance)",
-      "emrLocation": {
-        "section": "Short label for where this lives in the EMR (e.g., 'Patient Chart → Consent Forms tab')",
-        "steps": [
-          "Step 1: Open the patient chart and click the [Tab Name] tab",
-          "Step 2: Look for the [Record/Form Name] entry",
-          "Step 3: ..."
-        ],
-        "whatToLookFor": "Plain-language description of what a COMPLIANT record looks like (e.g., 'The consent form should be signed and dated before the procedure date. If the signature is missing or the date is after the procedure, this is a compliance issue.')"
-      }
-    }
-  ],
-  "gaps": [
-    {
-      "id": "gap-1",
-      "title": "Short title describing what is missing or inadequate in the policy",
-      "description": "Plain-language explanation of the gap — what the policy currently says (or fails to say), and specifically what is missing compared to the industry standard. Written so a non-clinical compliance professional can understand it.",
-      "impact": "Explain in plain language what could go wrong — for the patient, the hospital, or from a regulatory standpoint — if this gap is not addressed.",
-      "recommendation": "Specific, actionable language the hospital should add or change in the policy to close this gap.",
-      "severity": "Critical|High|Medium|Low",
-      "sources": [
-        {
-          "organization": "Name of the authoritative body (e.g., CMS, CDC, The Joint Commission, ASHP, OSHA, HHS, state health department)",
-          "title": "Exact name of the guidance document, regulation, or standard (e.g., 'Conditions of Participation §482.13', 'CDC Hand Hygiene Guidelines 2002', 'ASHP Guidelines on Preventing Medication Errors')",
-          "type": "Regulation|Guidance|Standard|Best Practice|Law",
-          "url": "Direct URL to the authoritative source — ONLY use official government or organization websites (.gov, cms.gov, cdc.gov, jointcommission.org, ashp.org, osha.gov, hhs.gov). Do NOT fabricate URLs."
-        }
-      ]
-    }
-  ]
+function truncateText(text) {
+  const wasTruncated = text.length > 50000;
+  const truncated = wasTruncated ? text.slice(0, 50000) + '\n\n[Document truncated for analysis]' : text;
+  return { truncated, wasTruncated };
 }
 
-Requirements:
-- summary: 2-3 substantive paragraphs
-- highlights: exactly 5-8 bullet points covering the most important policy elements
-- frameworks: identify ALL relevant regulatory frameworks (HIPAA, Joint Commission, CMS, state regulations, OSHA, etc.)
-- riskAreas: identify 3-6 specific compliance risk areas with severity ratings
-- checklist: 8-12 actionable compliance items with priority ratings; every item MUST include a populated "emrLocation" object with realistic, specific navigation steps for common hospital EMR systems
-- gaps: identify 4-8 specific gaps between the uploaded policy and current industry best practices. For EACH gap you MUST cite at least one authoritative source from CMS, CDC, The Joint Commission, ASHP, OSHA, HHS, or recognized healthcare law/regulatory bodies. Only cite sources that genuinely apply to this policy's subject matter. Every URL must be a real, known URL from an official organization website — if you are not certain of the exact URL, omit the url field rather than guessing.
-- All text must be written for a non-clinical compliance audience — no unexplained medical jargon
-
-Document to analyze:
-
-${truncated}
-
-Return ONLY the JSON object with no additional text, markdown formatting, or explanation.`;
+function checkCredentials(res) {
+  if (!apiKey && !authToken) {
+    res.status(500).json({ error: 'No Anthropic credentials configured. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in .env' });
+    return false;
+  }
+  return true;
 }
 
-app.post('/api/analyze', upload.single('file'), async (req, res) => {
+function handleApiError(err, res) {
+  console.error('API error:', err);
+  if (err.status === 401) {
+    return res.status(500).json({ error: 'Invalid Anthropic API key. Please check your configuration.' });
+  }
+  if (err.status === 429) {
+    return res.status(429).json({ error: 'Rate limit reached. Please wait a moment and try again.' });
+  }
+  return res.status(500).json({ error: `Request failed: ${err.message || 'Unknown error'}` });
+}
+
+async function callClaude(system, userContent, maxTokens) {
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: userContent }],
+  });
+  return message.content.filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+function parseJsonResponse(text) {
+  const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/, '').trim();
+  return JSON.parse(cleaned);
+}
+
+// ── POST /api/summarize ──────────────────────────────────────────────────────
+app.post('/api/summarize', upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    if (!apiKey && !authToken) {
-      return res.status(500).json({ error: 'No Anthropic credentials configured. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in .env' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!checkCredentials(res)) return;
 
     let documentText;
     try {
@@ -205,83 +165,315 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
     }
 
     if (!documentText || documentText.trim().length < 50) {
-      return res.status(400).json({ error: 'The document appears to be empty or could not be read' });
+      return res.status(400).json({ error: 'The document appears to be empty or could not be read.' });
     }
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: buildUserPrompt(documentText),
-        },
+    const { truncated: truncatedText, wasTruncated } = truncateText(documentText);
 
-      ],
-    });
+    const summaryText = await callClaude(
+      'You are a plain-language hospital compliance expert. Describe documents clearly for non-clinical staff.',
+      `In 2-3 sentences of plain English, describe what this hospital policy covers, its main purpose, and who it applies to. No jargon. Return only the summary text, no JSON, no markdown.\n\nDocument:\n${truncatedText}`,
+      300
+    );
 
-    const responseText = message.content
-      .filter(block => block.type === 'text')
-      .map(block => block.text)
-      .join('');
-
-    let analysisData;
-    try {
-      // Strip markdown code fences if present
-      const cleaned = responseText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-      analysisData = JSON.parse(cleaned);
-    } catch (parseErr) {
-      console.error('JSON parse error. Raw response:', responseText.slice(0, 500));
-      return res.status(500).json({ error: 'Failed to parse AI response as JSON. Please try again.' });
-    }
-
-    // Validate and normalize structure
-    const result = {
-      summary: analysisData.summary || 'No summary available.',
-      highlights: Array.isArray(analysisData.highlights) ? analysisData.highlights : [],
-      frameworks: Array.isArray(analysisData.frameworks) ? analysisData.frameworks : [],
-      riskAreas: Array.isArray(analysisData.riskAreas) ? analysisData.riskAreas : [],
-      checklist: Array.isArray(analysisData.checklist)
-        ? analysisData.checklist.map((item, idx) => ({
-            id: item.id || `item-${idx}`,
-            title: item.title || 'Untitled Item',
-            description: item.description || '',
-            priority: ['Critical', 'High', 'Medium', 'Low'].includes(item.priority) ? item.priority : 'Medium',
-            category: item.category || 'General',
-            completed: false,
-            emrLocation: item.emrLocation || null,
-          }))
-        : [],
-      gaps: Array.isArray(analysisData.gaps)
-        ? analysisData.gaps.map((gap, idx) => ({
-            id: gap.id || `gap-${idx}`,
-            title: gap.title || 'Untitled Gap',
-            description: gap.description || '',
-            impact: gap.impact || '',
-            recommendation: gap.recommendation || '',
-            severity: ['Critical', 'High', 'Medium', 'Low'].includes(gap.severity) ? gap.severity : 'Medium',
-            sources: Array.isArray(gap.sources) ? gap.sources.map(s => ({
-              organization: s.organization || '',
-              title: s.title || '',
-              type: s.type || 'Guidance',
-              url: sanitizeUrl(s.url),
-            })) : [],
-          }))
-        : [],
-      truncated: buildUserPrompt._wasTruncated || false,
-    };
-
-    return res.json(result);
+    return res.json({ summary: summaryText.trim(), policyText: documentText, truncated: wasTruncated });
   } catch (err) {
-    console.error('Analysis error:', err);
-    if (err.status === 401) {
-      return res.status(500).json({ error: 'Invalid Anthropic API key. Please check your configuration.' });
+    return handleApiError(err, res);
+  }
+});
+
+// ── POST /api/compliance-checklist ──────────────────────────────────────────
+app.post('/api/compliance-checklist', async (req, res) => {
+  try {
+    if (!checkCredentials(res)) return;
+    const { policyText } = req.body;
+    if (!policyText) return res.status(400).json({ error: 'policyText is required' });
+
+    const { truncated } = truncateText(policyText);
+
+    const raw = await callClaude(
+      'You are an expert hospital compliance officer writing audit checklists for non-clinical compliance staff. Always return valid JSON.',
+      `Generate a compliance audit checklist for the following hospital policy. Return a JSON object: { "checklist": [ ... ] }
+
+Each checklist item must follow this exact schema:
+{
+  "id": "unique-id-string",
+  "title": "Plain-language title a non-clinical person can understand",
+  "description": "What needs to be verified and why it matters. No medical jargon. If a clinical term is unavoidable, define it in parentheses.",
+  "priority": "Critical|High|Medium|Low",
+  "category": "Documentation|Training|Process|Technology|Governance",
+  "completed": false,
+  "sourceOfTruth": {
+    "system": "One of: Epic EMR | Cerner EMR | Workday | Registration System | MCR | Policy Repository | Medical Records | Credentialing System | Billing System | Other",
+    "location": "Plain-language path, e.g. 'Epic -> Patient Chart -> Consent Forms tab'",
+    "steps": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
+    "whatToLookFor": "Plain-language description of what a compliant record looks like vs. a non-compliant one"
+  }
+}
+
+Requirements:
+- Generate 8-12 items
+- Written for a non-clinician auditor — no unexplained medical jargon
+- Each item must tell the auditor EXACTLY which system to open and what screen/tab to navigate to
+- System options: Epic EMR, Cerner EMR, Workday (HR/payroll/training), Registration System (patient intake), MCR (Medical Cost Report), Policy Repository (SharePoint/Intranet), Medical Records, Credentialing System, Billing System
+- Return ONLY the JSON object, no markdown, no explanation
+
+Policy document:
+${truncated}`,
+      4096
+    );
+
+    const data = parseJsonResponse(raw);
+    const checklist = Array.isArray(data.checklist) ? data.checklist.map((item, idx) => ({
+      id: item.id || `item-${idx}`,
+      title: item.title || 'Untitled Item',
+      description: item.description || '',
+      priority: ['Critical', 'High', 'Medium', 'Low'].includes(item.priority) ? item.priority : 'Medium',
+      category: item.category || 'General',
+      completed: false,
+      sourceOfTruth: item.sourceOfTruth || null,
+    })) : [];
+
+    return res.json({ checklist });
+  } catch (err) {
+    return handleApiError(err, res);
+  }
+});
+
+// ── POST /api/gaps ───────────────────────────────────────────────────────────
+app.post('/api/gaps', async (req, res) => {
+  try {
+    if (!checkCredentials(res)) return;
+    const { policyText } = req.body;
+    if (!policyText) return res.status(400).json({ error: 'policyText is required' });
+
+    const { truncated } = truncateText(policyText);
+
+    const raw = await callClaude(
+      'You are a hospital compliance expert specializing in regulatory gap analysis. Always return valid JSON.',
+      `Analyze the following hospital policy against industry best practices and regulatory standards. Return a JSON object: { "gaps": [ ... ] }
+
+Each gap must follow this schema:
+{
+  "id": "gap-N",
+  "title": "Short title of what is missing or inadequate",
+  "description": "Plain-language explanation of the gap — what the policy currently says (or fails to say) and what is missing.",
+  "impact": "Plain-language explanation of what could go wrong if this gap is not addressed.",
+  "recommendation": "Specific, actionable language the hospital should add or change to close this gap.",
+  "severity": "Critical|High|Medium|Low",
+  "sources": [
+    {
+      "organization": "CMS | CDC | HRSA | HHS | OSHA | Joint Commission | State DOH | Other official body",
+      "title": "Exact name of the guidance document or regulation",
+      "type": "Regulation|Guidance|Standard|Best Practice|Law",
+      "url": "Direct URL — ONLY use cms.gov, cdc.gov, hrsa.gov, hhs.gov, jointcommission.org, osha.gov, or official state/regulatory sites. Omit if uncertain."
     }
-    if (err.status === 429) {
-      return res.status(429).json({ error: 'Rate limit reached. Please wait a moment and try again.' });
+  ]
+}
+
+Requirements:
+- Identify 4-8 specific gaps
+- Cite ONLY CMS, CDC, HRSA, HHS, OSHA, Joint Commission, state DOH, or official regulatory bodies
+- Compare against peer hospital best practices
+- All text written for a non-clinical compliance audience
+- Return ONLY the JSON object, no markdown, no explanation
+
+Policy document:
+${truncated}`,
+      4096
+    );
+
+    const data = parseJsonResponse(raw);
+    const gaps = Array.isArray(data.gaps) ? data.gaps.map((gap, idx) => ({
+      id: gap.id || `gap-${idx}`,
+      title: gap.title || 'Untitled Gap',
+      description: gap.description || '',
+      impact: gap.impact || '',
+      recommendation: gap.recommendation || '',
+      severity: ['Critical', 'High', 'Medium', 'Low'].includes(gap.severity) ? gap.severity : 'Medium',
+      sources: Array.isArray(gap.sources) ? gap.sources.map(s => ({
+        organization: s.organization || '',
+        title: s.title || '',
+        type: s.type || 'Guidance',
+        url: sanitizeUrl(s.url),
+      })) : [],
+    })) : [];
+
+    return res.json({ gaps });
+  } catch (err) {
+    return handleApiError(err, res);
+  }
+});
+
+// ── POST /api/fill-matrix ────────────────────────────────────────────────────
+app.post('/api/fill-matrix', upload.fields([{ name: 'matrixFile', maxCount: 1 }]), async (req, res) => {
+  try {
+    if (!checkCredentials(res)) return;
+    const files = req.files;
+    if (!files || !files.matrixFile || !files.matrixFile[0]) {
+      return res.status(400).json({ error: 'matrixFile is required' });
     }
-    return res.status(500).json({ error: `Analysis failed: ${err.message || 'Unknown error'}` });
+    const { policyText } = req.body;
+    if (!policyText) return res.status(400).json({ error: 'policyText is required' });
+
+    let matrixText;
+    try {
+      matrixText = await extractText(files.matrixFile[0]);
+    } catch (err) {
+      return res.status(400).json({ error: `Matrix file parsing failed: ${err.message}` });
+    }
+
+    const { truncated: truncatedPolicy } = truncateText(policyText);
+
+    const raw = await callClaude(
+      'You are a hospital compliance expert filling out risk matrices. Always return valid JSON.',
+      `You have a hospital policy document and a risk matrix template. Fill in the risk matrix based on the policy content.
+
+Return a JSON object:
+{
+  "filledMatrix": {
+    "headers": ["Column 1", "Column 2", ...],
+    "rows": [
+      {
+        "cells": ["value1", "value2", ...],
+        "risk": "Risk description",
+        "likelihood": "High|Medium|Low",
+        "impact": "High|Medium|Low",
+        "mitigation": "Mitigation strategy"
+      }
+    ]
+  },
+  "rawText": "If the matrix structure is unclear, put the filled content here as plain text"
+}
+
+If the template has clear headers/columns, populate rows for each identifiable risk in the policy.
+If the template structure is unclear, fill rawText with a structured plain-text response.
+Return ONLY the JSON object.
+
+POLICY DOCUMENT:
+${truncatedPolicy}
+
+MATRIX TEMPLATE:
+${matrixText.slice(0, 10000)}`,
+      4096
+    );
+
+    const data = parseJsonResponse(raw);
+    return res.json({
+      filledMatrix: data.filledMatrix || { headers: [], rows: [] },
+      rawText: data.rawText || '',
+    });
+  } catch (err) {
+    return handleApiError(err, res);
+  }
+});
+
+// ── POST /api/compare-versions ───────────────────────────────────────────────
+app.post('/api/compare-versions', upload.array('version', 5), async (req, res) => {
+  try {
+    if (!checkCredentials(res)) return;
+    if (!req.files || req.files.length < 2) {
+      return res.status(400).json({ error: 'At least 2 version files are required' });
+    }
+
+    const versionTexts = [];
+    for (const file of req.files) {
+      try {
+        const text = await extractText(file);
+        versionTexts.push({ name: file.originalname, text });
+      } catch (err) {
+        return res.status(400).json({ error: `Failed to parse ${file.originalname}: ${err.message}` });
+      }
+    }
+
+    const versionsBlock = versionTexts.map((v, i) =>
+      `=== VERSION ${i + 1}: ${v.name} ===\n${v.text.slice(0, 15000)}`
+    ).join('\n\n');
+
+    const raw = await callClaude(
+      'You are a hospital compliance expert specializing in policy version comparison. Always return valid JSON.',
+      `Compare these ${versionTexts.length} versions of a hospital policy and identify all material changes.
+
+Return a JSON object:
+{
+  "versionCount": ${versionTexts.length},
+  "summary": "Plain-language overall summary of the most important changes across all versions",
+  "changes": [
+    {
+      "section": "Section name or topic area",
+      "type": "Added|Removed|Modified|Risk Introduced|Risk Removed",
+      "before": "Previous language, or null if new",
+      "after": "New language, or null if removed",
+      "riskLevel": "Critical|High|Medium|Low|None",
+      "explanation": "Plain-language explanation of what changed and why it matters for compliance"
+    }
+  ]
+}
+
+Requirements:
+- Identify ALL material changes between versions
+- Focus on compliance implications
+- Plain language throughout
+- Return ONLY the JSON object
+
+${versionsBlock}`,
+      4096
+    );
+
+    const data = parseJsonResponse(raw);
+    return res.json({
+      versionCount: data.versionCount || versionTexts.length,
+      summary: data.summary || '',
+      changes: Array.isArray(data.changes) ? data.changes : [],
+    });
+  } catch (err) {
+    return handleApiError(err, res);
+  }
+});
+
+// ── POST /api/ask ────────────────────────────────────────────────────────────
+app.post('/api/ask', async (req, res) => {
+  try {
+    if (!checkCredentials(res)) return;
+    const { policyText, question } = req.body;
+    if (!policyText) return res.status(400).json({ error: 'policyText is required' });
+    if (!question) return res.status(400).json({ error: 'question is required' });
+
+    const { truncated } = truncateText(policyText);
+
+    const raw = await callClaude(
+      'You are a hospital compliance expert answering questions about policy documents. Always return valid JSON.',
+      `Answer the following question about this hospital policy. If the question cannot be answered from the policy text, say so clearly.
+
+Return a JSON object:
+{
+  "answer": "Plain-language answer to the question",
+  "citations": [
+    {
+      "quote": "Exact quote from the policy that supports the answer",
+      "context": "Brief explanation of how this quote supports the answer"
+    }
+  ]
+}
+
+- If the question cannot be answered from the policy, set answer to a clear explanation and citations to []
+- Keep the answer concise and in plain language
+- Return ONLY the JSON object
+
+QUESTION: ${question}
+
+POLICY DOCUMENT:
+${truncated}`,
+      1024
+    );
+
+    const data = parseJsonResponse(raw);
+    return res.json({
+      answer: data.answer || 'No answer available.',
+      citations: Array.isArray(data.citations) ? data.citations : [],
+    });
+  } catch (err) {
+    return handleApiError(err, res);
   }
 });
 

@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { PolicyGap } from './AnalysisResults'
 
+export type { PolicyGap }
+
 interface PolicyGapsProps {
   gaps: PolicyGap[]
 }

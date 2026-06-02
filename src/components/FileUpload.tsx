@@ -27,9 +27,7 @@ const ACCEPTED_MIME = [
 const STATUS_MESSAGES = [
   'Extracting document text…',
   'Parsing policy structure…',
-  'Running compliance analysis…',
-  'Identifying regulatory frameworks…',
-  'Generating compliance checklist…',
+  'Generating summary…',
 ]
 
 const PP_EXAMPLES = [
@@ -246,7 +244,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
           <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3.5 animate-fade-in">
             <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-blue-800">Analyzing document…</p>
+              <p className="text-sm font-semibold text-blue-800">Extracting &amp; summarizing…</p>
               <p className="text-xs text-blue-600 mt-0.5">{STATUS_MESSAGES[statusIdx]}</p>
             </div>
           </div>
@@ -268,12 +266,12 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Analyzing Policy…
+              Analyzing…
             </>
           ) : (
             <>
               <ShieldCheckIcon />
-              Analyze Policy &amp; Procedure
+              Analyze Document
             </>
           )}
         </button>
