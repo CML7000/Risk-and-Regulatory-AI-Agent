@@ -162,7 +162,7 @@ const ComplianceChecklist: React.FC<ComplianceChecklistProps> = ({ items, onTogg
                 {/* Checkbox */}
                 <div className="flex-shrink-0 mt-0.5">
                   {item.completed ? (
-                    <CheckSquare className="w-4.5 h-4.5 text-blue-600 w-[18px] h-[18px]" />
+                    <CheckSquare className="w-[18px] h-[18px] text-blue-600" />
                   ) : (
                     <Square className="w-[18px] h-[18px] text-slate-300" />
                   )}

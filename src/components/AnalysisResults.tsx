@@ -36,6 +36,7 @@ export interface AnalysisData {
   riskAreas: RiskArea[]
   checklist: ChecklistItem[]
   gaps: PolicyGap[]
+  truncated?: boolean
 }
 
 export interface ChecklistItem {
@@ -72,7 +73,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
   return (
     <div className="space-y-6 animate-slide-up">
       {/* Summary */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-blue-600" />
           Policy Summary
@@ -87,7 +88,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
       </div>
 
       {/* Key Highlights */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
           <Star className="w-5 h-5 text-amber-500" />
           Key Policy Highlights
@@ -104,7 +105,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
 
       {/* Regulatory Frameworks */}
       {data.frameworks.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-indigo-600" />
             Regulatory Frameworks Referenced
@@ -125,7 +126,7 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ data }) => {
 
       {/* Risk Areas */}
       {data.riskAreas.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 bg-white">
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
             Identified Risk Areas

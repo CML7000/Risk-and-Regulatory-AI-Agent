@@ -101,6 +101,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onAnalyze, isLoading, error }) 
 
   const handleAnalyze = async () => {
     if (!selectedFile || isLoading) return
+    if (statusInterval.current) clearInterval(statusInterval.current)
     setStatusIdx(0)
     statusInterval.current = setInterval(() => {
       setStatusIdx(prev => (prev + 1) % STATUS_MESSAGES.length)

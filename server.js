@@ -15,10 +15,31 @@ const __dirname = path.dirname(__filename);
 // pdf-parse and mammoth are CommonJS modules; use createRequire
 const require = createRequire(import.meta.url);
 
+const TRUSTED_DOMAINS = [
+  'cms.gov', 'cdc.gov', 'hhs.gov', 'osha.gov', 'nih.gov', 'ahrq.gov', 'medicare.gov',
+  'jointcommission.org', 'ashp.org', 'aha.org', 'aanp.org', 'acog.org', 'ama-assn.org',
+  'nursingworld.org', 'ismp.org', 'nccmerp.org', 'ihi.org', 'psnet.ahrq.gov',
+];
+
+function sanitizeUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') return null;
+    const host = parsed.hostname.toLowerCase();
+    const trusted = TRUSTED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+    return trusted ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 const app = express();
 const port = 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGIN || 'http://localhost:5173',
+}));
 app.use(express.json());
 
 const storage = multer.memoryStorage();
@@ -35,8 +56,12 @@ const upload = multer({
   },
 });
 
+// Support both standard API keys (ANTHROPIC_API_KEY) and OAuth tokens (ANTHROPIC_AUTH_TOKEN)
+const apiKey = process.env.ANTHROPIC_API_KEY || '';
+const authToken = process.env.ANTHROPIC_AUTH_TOKEN || '';
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  ...(apiKey && { apiKey }),
+  ...(authToken && { authToken }),
 });
 
 async function extractText(file) {
@@ -81,7 +106,10 @@ For every checklist item you MUST include an "emrLocation" object that tells a n
 Always return valid JSON matching the exact schema requested.`;
 
 function buildUserPrompt(documentText) {
-  const truncated = documentText.length > 50000 ? documentText.slice(0, 50000) + '\n\n[Document truncated for analysis]' : documentText;
+  const wasTruncated = documentText.length > 50000;
+  const truncated = wasTruncated ? documentText.slice(0, 50000) + '\n\n[Document truncated for analysis]' : documentText;
+  // wasTruncated is exported alongside the result so the UI can warn the user
+  buildUserPrompt._wasTruncated = wasTruncated;
 
   return `Analyze the following hospital policy/procedure document and return a JSON object with this exact structure:
 
@@ -165,8 +193,8 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not configured on the server' });
+    if (!apiKey && !authToken) {
+      return res.status(500).json({ error: 'No Anthropic credentials configured. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in .env' });
     }
 
     let documentText;
@@ -189,6 +217,7 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
           role: 'user',
           content: buildUserPrompt(documentText),
         },
+
       ],
     });
 
@@ -236,10 +265,11 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
               organization: s.organization || '',
               title: s.title || '',
               type: s.type || 'Guidance',
-              url: s.url || null,
+              url: sanitizeUrl(s.url),
             })) : [],
           }))
         : [],
+      truncated: buildUserPrompt._wasTruncated || false,
     };
 
     return res.json(result);
@@ -257,7 +287,7 @@ app.post('/api/analyze', upload.single('file'), async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Hospital Policy Compliance server running on http://localhost:${port}`);
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('WARNING: ANTHROPIC_API_KEY is not set. Set it in a .env file.');
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    console.warn('WARNING: No Anthropic credentials set. Add ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN to .env');
   }
 });

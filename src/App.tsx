@@ -4,7 +4,7 @@ import FileUpload from './components/FileUpload'
 import AnalysisResults, { AnalysisData, ChecklistItem } from './components/AnalysisResults'
 import ComplianceChecklist from './components/ComplianceChecklist'
 import PolicyGaps from './components/PolicyGaps'
-import { ShieldCheck, FileText, ListChecks, BarChart3, ShieldAlert } from 'lucide-react'
+import { ShieldCheck, FileText, ListChecks, BarChart3, ShieldAlert, AlertTriangle } from 'lucide-react'
 
 function App() {
   const [isLoading, setIsLoading] = useState(false)
@@ -26,11 +26,17 @@ function App() {
         body: formData,
       })
 
-      const data = await res.json()
-
       if (!res.ok) {
-        throw new Error(data.error || `Server error: ${res.status}`)
+        // Parse error body if JSON, otherwise fall back to status text
+        let errMsg = `Server error: ${res.status}`
+        try {
+          const errData = await res.json()
+          errMsg = errData.error || errMsg
+        } catch { /* non-JSON error body */ }
+        throw new Error(errMsg)
       }
+
+      const data = await res.json()
 
       setAnalysisData(data)
       setChecklist(data.checklist || [])
@@ -128,6 +134,14 @@ function App() {
           {/* Right column: results */}
           {analysisWithChecklist && (
             <div className="space-y-6">
+              {analysisWithChecklist.truncated && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-amber-800">
+                    <span className="font-semibold">Document was truncated.</span> Your file exceeds 50,000 characters. Only the first portion was analyzed — results may be incomplete. Consider splitting large documents into sections.
+                  </p>
+                </div>
+              )}
               <AnalysisResults data={analysisWithChecklist} />
               {analysisWithChecklist.gaps?.length > 0 && (
                 <PolicyGaps gaps={analysisWithChecklist.gaps} />
